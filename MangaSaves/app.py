@@ -56,11 +56,17 @@ class AppLectura(ctk.CTk):
         # "ultimos" = Muestra los 5 más recientes modificado, "todos" = Muestra el listado completo
         self.modo_vista = "ultimos"
         
+        # === NUEVO: Variables para navegación alfabética y paginación ===
+        self.letra_actual = None
+        self.pagina_actual = 1
+        self.total_paginas = 0
+        self.registros_por_pagina = 10
+        
         self.init_db()
         
         # Grid Estructural Principal
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
         
         # 1. BARRA SUPERIOR (Agregar, Buscar y Alternar Vista)
         self.top_frame = ctk.CTkFrame(self)
@@ -81,20 +87,33 @@ class AppLectura(ctk.CTk):
         lbl_sep = ctk.CTkLabel(self.top_frame, text="|", text_color="gray40")
         lbl_sep.pack(side="left", padx=5)
         
-        self.entry_buscar = ctk.CTkEntry(self.top_frame, placeholder_text="Buscar...", width=150)
-        self.entry_buscar.pack(side="left", padx=5, pady=10)
-        self.entry_buscar.bind("<KeyRelease>", self.buscar_registros)
+        # === NUEVO: Sistema de búsqueda mejorado ===
+        self.search_frame = ctk.CTkFrame(self.top_frame, fg_color="transparent")
+        self.search_frame.pack(side="left", padx=5, pady=10)
+        
+        self.entry_buscar = ctk.CTkEntry(self.search_frame, placeholder_text="Buscar...", width=150)
+        self.entry_buscar.pack(side="left", padx=(0, 5))
+        self.entry_buscar.bind("<Return>", self.ejecutar_busqueda)
+        
+        self.btn_buscar = ctk.CTkButton(self.search_frame, text="🔍 Buscar", width=70, command=self.ejecutar_busqueda)
+        self.btn_buscar.pack(side="left")
         
         lbl_sep2 = ctk.CTkLabel(self.top_frame, text="|", text_color="gray40")
         lbl_sep2.pack(side="left", padx=5)
         
-        # Botón dinámico para alternar entre ver los últimos 5 o toda la lista
+        # Botón dinámico para alternar entre ver los últimos 5 o la lista alfabética
         self.btn_vista = ctk.CTkButton(self.top_frame, text="📋 Ver Lista Completa", fg_color="#1F538D", hover_color="#2A6BB2", command=self.alternar_modo_vista)
         self.btn_vista.pack(side="left", padx=10, pady=10)
         
-        # 2. CONTENEDOR DE LA TABLA
+        # 2. PANEL ALFABÉTICO (nuevo)
+        self.alfabetico_frame = ctk.CTkFrame(self, fg_color="transparent", height=35)
+        self.alfabetico_frame.grid(row=1, column=0, sticky="ew", padx=15, pady=5)
+        self.alfabetico_frame.grid_propagate(False)
+        self.alfabetico_frame.grid_remove()  # Oculto por defecto
+        
+        # 3. CONTENEDOR DE LA TABLA
         self.table_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.table_container.grid(row=1, column=0, sticky="nsew", padx=15, pady=5)
+        self.table_container.grid(row=2, column=0, sticky="nsew", padx=15, pady=5)
         self.table_container.grid_columnconfigure(0, weight=1)
         self.table_container.grid_rowconfigure(1, weight=1)
         
@@ -107,9 +126,15 @@ class AppLectura(ctk.CTk):
         self.canvas_frame = ctk.CTkScrollableFrame(self.table_container, fg_color="transparent")
         self.canvas_frame.grid(row=1, column=0, sticky="nsew")
         
-        # 3. BARRA INFERIOR DE ACCIONES
+        # 4. BARRA DE PAGINACIÓN (nueva)
+        self.paginacion_frame = ctk.CTkFrame(self, fg_color="transparent", height=30)
+        self.paginacion_frame.grid(row=3, column=0, sticky="ew", padx=15, pady=5)
+        self.paginacion_frame.grid_propagate(False)
+        self.paginacion_frame.grid_remove()  # Oculto por defecto
+        
+        # 5. BARRA INFERIOR DE ACCIONES
         self.action_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.action_frame.grid(row=2, column=0, sticky="ew", padx=15, pady=(5, 15))
+        self.action_frame.grid(row=4, column=0, sticky="ew", padx=15, pady=(5, 15))
         
         self.btn_eliminar = ctk.CTkButton(self.action_frame, text="Eliminar Seleccionado", fg_color="#A30000", hover_color="#D30000", command=self.eliminar_registro)
         self.btn_eliminar.pack(side="left")
@@ -192,6 +217,7 @@ class AppLectura(ctk.CTk):
         for f_id, widgets in self.lista_frames_filas.items():
             self.configurar_columnas_grid(widgets["frame"])
             widgets["capitulo"].configure(width=max(25, self.anchos["capitulo"] - 10))
+            widgets["pagina"].configure(width=max(50, self.anchos["pagina"] - 10))
             widgets["estado"].configure(width=max(50, self.anchos["estado"] - 10))
 
     def init_db(self):
@@ -209,18 +235,167 @@ class AppLectura(ctk.CTk):
         """)
         self.conn.commit()
 
+    # === NUEVO: Sistema de navegación alfabética ===
+    def crear_panel_alfabetico(self):
+        """Crea el panel con las letras del alfabeto"""
+        for w in self.alfabetico_frame.winfo_children():
+            w.destroy()
+        
+        letras = ['A','B','C','D','E','F','G','H','I','J','K','L','M',
+                  'N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#']
+        
+        for letra in letras:
+            btn = ctk.CTkButton(
+                self.alfabetico_frame,
+                text=letra,
+                width=30,
+                height=28,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#1F538D" if letra == 'A' else "transparent",
+                text_color="#FFFFFF" if letra == 'A' else "gray70",
+                hover_color="#2A6BB2",
+                command=lambda l=letra: self.seleccionar_letra(l)
+            )
+            btn.pack(side="left", padx=1, pady=2)
+        
+        # Seleccionar 'A' por defecto
+        self.letra_actual = 'A'
+        self.mostrar_pagina(1)
+
+    def seleccionar_letra(self, letra):
+        """Selecciona una letra y carga su contenido"""
+        # Actualizar estilo de botones
+        for child in self.alfabetico_frame.winfo_children():
+            if isinstance(child, ctk.CTkButton):
+                if child.cget("text") == letra:
+                    child.configure(fg_color="#1F538D", text_color="#FFFFFF")
+                else:
+                    child.configure(fg_color="transparent", text_color="gray70")
+        
+        self.letra_actual = letra
+        self.pagina_actual = 1
+        self.mostrar_pagina(1)
+
+    def calcular_total_paginas(self):
+        """Calcula el total de páginas para la letra actual"""
+        if not self.letra_actual:
+            return 0
+        
+        # Construir condición WHERE según la letra
+        if self.letra_actual == '#':
+            where_condition = "nombre GLOB '[0-9]*' OR nombre GLOB '[^A-Za-z0-9]*'"
+        else:
+            where_condition = f"nombre LIKE '{self.letra_actual}%'"
+        
+        query = f"SELECT COUNT(*) FROM lecturas WHERE {where_condition}"
+        self.cursor.execute(query)
+        total = self.cursor.fetchone()[0]
+        
+        self.total_paginas = (total + self.registros_por_pagina - 1) // self.registros_por_pagina
+        if self.total_paginas == 0:
+            self.total_paginas = 1
+        return self.total_paginas
+
+    def mostrar_pagina(self, pagina):
+        """Muestra una página específica de la letra actual"""
+        if not self.letra_actual:
+            return
+        
+        self.pagina_actual = pagina
+        
+        # Calcular total de páginas
+        self.calcular_total_paginas()
+        
+        # Construir consulta SQL
+        if self.letra_actual == '#':
+            where_condition = "nombre GLOB '[0-9]*' OR nombre GLOB '[^A-Za-z0-9]*'"
+        else:
+            where_condition = f"nombre LIKE '{self.letra_actual}%'"
+        
+        offset = (pagina - 1) * self.registros_por_pagina
+        
+        # Obtener registros con paginación
+        query = f"""
+            SELECT id, nombre, capitulo, pagina, terminado, fecha_mod 
+            FROM lecturas 
+            WHERE {where_condition}
+            ORDER BY nombre COLLATE NOCASE, id
+            LIMIT ? OFFSET ?
+        """
+        self.cargar_datos(query_custom=query, params_custom=(self.registros_por_pagina, offset))
+        
+        # Actualizar controles de paginación
+        self.actualizar_controles_paginacion()
+
+    def actualizar_controles_paginacion(self):
+        """Actualiza los botones de paginación"""
+        for w in self.paginacion_frame.winfo_children():
+            w.destroy()
+        
+        if self.total_paginas <= 1:
+            return
+        
+        # Botón Anterior
+        if self.pagina_actual > 1:
+            btn_prev = ctk.CTkButton(
+                self.paginacion_frame,
+                text="◀",
+                width=30,
+                height=28,
+                command=lambda: self.mostrar_pagina(self.pagina_actual - 1)
+            )
+            btn_prev.pack(side="left", padx=2)
+        
+        # Números de página
+        rango = range(
+            max(1, self.pagina_actual - 2),
+            min(self.total_paginas + 1, self.pagina_actual + 3)
+        )
+        
+        for num in rango:
+            btn = ctk.CTkButton(
+                self.paginacion_frame,
+                text=str(num),
+                width=30,
+                height=28,
+                fg_color="#1F538D" if num == self.pagina_actual else "transparent",
+                text_color="#FFFFFF" if num == self.pagina_actual else "gray70",
+                hover_color="#2A6BB2",
+                command=lambda n=num: self.mostrar_pagina(n)
+            )
+            btn.pack(side="left", padx=2)
+        
+        # Botón Siguiente
+        if self.pagina_actual < self.total_paginas:
+            btn_next = ctk.CTkButton(
+                self.paginacion_frame,
+                text="▶",
+                width=30,
+                height=28,
+                command=lambda: self.mostrar_pagina(self.pagina_actual + 1)
+            )
+            btn_next.pack(side="left", padx=2)
+
     def alternar_modo_vista(self):
         """ Cambia la lógica de renderizado principal """
         if self.modo_vista == "ultimos":
             self.modo_vista = "todos"
             self.btn_vista.configure(text="🕒 Ver Últimos 5", fg_color="#1E8449", hover_color="#239B56")
+            # Mostrar panel alfabético y paginación
+            self.alfabetico_frame.grid()
+            self.paginacion_frame.grid()
+            self.crear_panel_alfabetico()
+            # Limpiar búsqueda
+            self.entry_buscar.delete(0, tk.END)
         else:
             self.modo_vista = "ultimos"
             self.btn_vista.configure(text="📋 Ver Lista Completa", fg_color="#1F538D", hover_color="#2A6BB2")
-        
-        # Reiniciar campo de búsqueda al cambiar de vista para evitar conflictos visuales
-        self.entry_buscar.delete(0, tk.END)
-        self.cargar_datos()
+            # Ocultar paneles
+            self.alfabetico_frame.grid_remove()
+            self.paginacion_frame.grid_remove()
+            # Limpiar búsqueda
+            self.entry_buscar.delete(0, tk.END)
+            self.cargar_datos()
 
     def cargar_datos(self, query_custom=None, params_custom=()):
         # 1. Limpieza total de widgets huerfanos del canvas
@@ -298,10 +473,12 @@ class AppLectura(ctk.CTk):
             
             ctk.CTkLabel(item_frame, text="").grid(row=0, column=3)
             
-            # Página
-            lbl_pag = ctk.CTkLabel(item_frame, text=pagina, text_color=color_texto, anchor="w")
-            lbl_pag.grid(row=0, column=4, sticky="ew", padx=4, pady=8)
-            lbl_pag.bind("<Button-1>", lambda e, idx=f_id: self.seleccionar_fila(idx))
+            # === NUEVO: Página editable ===
+            pag_var = tk.StringVar(value=str(pagina))
+            entry_pag = ctk.CTkEntry(item_frame, textvariable=pag_var, width=self.anchos["pagina"] - 10, justify="left")
+            entry_pag.grid(row=0, column=4, sticky="ew", padx=4, pady=8)
+            entry_pag.bind("<Return>", lambda e, idx=f_id, var=pag_var: self.actualizar_pagina_inline(idx, var))
+            entry_pag.bind("<FocusOut>", lambda e, idx=f_id, var=pag_var: self.actualizar_pagina_inline(idx, var))
             
             ctk.CTkLabel(item_frame, text="").grid(row=0, column=5)
             
@@ -331,7 +508,7 @@ class AppLectura(ctk.CTk):
                 "frame": item_frame,
                 "nombre": lbl_nom,
                 "capitulo": entry_cap,
-                "pagina": lbl_pag,
+                "pagina": entry_pag,
                 "estado": btn_estado,
                 "fecha": lbl_fecha
             }
@@ -342,7 +519,12 @@ class AppLectura(ctk.CTk):
         
         self.cursor.execute("UPDATE lecturas SET terminado = ?, fecha_mod = ? WHERE id = ?", (nuevo_estado_db, fecha_actual, registro_id))
         self.conn.commit()
-        self.cargar_datos()
+        
+        # Refrescar según modo actual
+        if self.modo_vista == "ultimos":
+            self.cargar_datos()
+        else:
+            self.mostrar_pagina(self.pagina_actual)
 
     def procesar_orden_columna(self, clave_columna):
         """ Solo procesa el orden por clicks si está el listado completo activo """
@@ -355,7 +537,9 @@ class AppLectura(ctk.CTk):
         self.direcciones_orden[clave_columna] = "DESC" if self.direcciones_orden[clave_columna] == "ASC" else "ASC"
         
         self.dibujar_cabeceras()
-        self.cargar_datos()
+        # Cargar datos con el nuevo orden
+        if self.modo_vista == "todos":
+            self.mostrar_pagina(self.pagina_actual)
 
     def copiar_y_seleccionar(self, texto, registro_id):
         self.clipboard_clear()
@@ -389,9 +573,34 @@ class AppLectura(ctk.CTk):
         self.cursor.execute("UPDATE lecturas SET capitulo = ?, fecha_mod = ? WHERE id = ?", (nuevo_val, fecha_actual, registro_id))
         self.conn.commit()
         
-        # Si se edita en la vista de los 5 últimos, refrescamos para asegurar que se reposicione arriba
+        # Refrescar según modo actual
         if self.modo_vista == "ultimos":
             self.cargar_datos()
+        else:
+            self.mostrar_pagina(self.pagina_actual)
+
+    # === NUEVO: Actualizar página inline ===
+    def actualizar_pagina_inline(self, registro_id, string_var):
+        """Actualiza el campo página/plataforma con edición inline"""
+        nuevo_val = string_var.get().strip()
+        
+        if not nuevo_val:
+            # Si está vacío, restaurar valor anterior
+            self.cursor.execute("SELECT pagina FROM lecturas WHERE id = ?", (registro_id,))
+            resultado = self.cursor.fetchone()
+            if resultado:
+                string_var.set(str(resultado[0]))
+            return
+        
+        fecha_actual = datetime.now().strftime("%d/%m/%Y %H:%M")
+        self.cursor.execute("UPDATE lecturas SET pagina = ?, fecha_mod = ? WHERE id = ?", (nuevo_val, fecha_actual, registro_id))
+        self.conn.commit()
+        
+        # Refrescar según modo actual
+        if self.modo_vista == "ultimos":
+            self.cargar_datos()
+        else:
+            self.mostrar_pagina(self.pagina_actual)
 
     def agregar_registro(self):
         nombre = self.entry_nombre.get().strip()
@@ -412,7 +621,12 @@ class AppLectura(ctk.CTk):
         self.entry_nombre.delete(0, tk.END)
         self.entry_capitulo.delete(0, tk.END)
         self.entry_pagina.delete(0, tk.END)
-        self.cargar_datos()
+        
+        # Refrescar según modo actual
+        if self.modo_vista == "ultimos":
+            self.cargar_datos()
+        else:
+            self.mostrar_pagina(self.pagina_actual)
 
     def eliminar_registro(self):
         if self.registro_seleccionado_id is None:
@@ -422,19 +636,40 @@ class AppLectura(ctk.CTk):
             self.cursor.execute("DELETE FROM lecturas WHERE id = ?", (self.registro_seleccionado_id,))
             self.conn.commit()
             self.registro_seleccionado_id = None
-            self.cargar_datos()
+            
+            # Refrescar según modo actual
+            if self.modo_vista == "ultimos":
+                self.cargar_datos()
+            else:
+                self.mostrar_pagina(self.pagina_actual)
 
-    def buscar_registros(self, event=None):
+    # === NUEVO: Sistema de búsqueda mejorado ===
+    def ejecutar_busqueda(self, event=None):
+        """Ejecuta la búsqueda solo cuando se presiona Enter o el botón"""
         texto = self.entry_buscar.get().strip()
         
-        # Si el usuario borra la búsqueda, regresamos a respetar el modo visual activo
+        # Si el campo está vacío, volver a la vista correspondiente
         if not texto:
-            self.cargar_datos()
+            if self.modo_vista == "ultimos":
+                self.cargar_datos()
+            else:
+                self.mostrar_pagina(self.pagina_actual)
             return
-
-        # Al escribir en la barra de búsqueda, se fuerza la consulta global ignorando el límite de 5
-        query = "SELECT id, nombre, capitulo, pagina, terminado, fecha_mod FROM lecturas WHERE nombre LIKE ? OR pagina LIKE ? ORDER BY id DESC"
+        
+        # Si estamos en modo "últimos", cambiar temporalmente a búsqueda
+        # Pero mostramos todos los resultados de búsqueda, no solo 5
+        query = """
+            SELECT id, nombre, capitulo, pagina, terminado, fecha_mod 
+            FROM lecturas 
+            WHERE nombre LIKE ? OR pagina LIKE ? 
+            ORDER BY id DESC
+        """
         self.cargar_datos(query_custom=query, params_custom=(f"%{texto}%", f"%{texto}%"))
+        
+        # Ocultar paneles durante la búsqueda
+        if self.modo_vista == "todos":
+            self.alfabetico_frame.grid_remove()
+            self.paginacion_frame.grid_remove()
 
 if __name__ == "__main__":
     app = AppLectura()
