@@ -78,8 +78,11 @@ class AppLectura(ctk.CTk):
         self.entry_capitulo = ctk.CTkEntry(self.top_frame, placeholder_text="Cap. (ej: 2.3)", width=65)
         self.entry_capitulo.pack(side="left", padx=5, pady=10)
         
+        # === MODIFICADO: Entry para página con normalización a mayúsculas ===
         self.entry_pagina = ctk.CTkEntry(self.top_frame, placeholder_text="Página / Web", width=140)
         self.entry_pagina.pack(side="left", padx=5, pady=10)
+        # Convertir a mayúsculas mientras el usuario escribe
+        self.entry_pagina.bind("<KeyRelease>", self.normalizar_pagina_entry)
         
         self.btn_agregar = ctk.CTkButton(self.top_frame, text="＋ Agregar", width=95, command=self.agregar_registro)
         self.btn_agregar.pack(side="left", padx=10, pady=10)
@@ -148,6 +151,20 @@ class AppLectura(ctk.CTk):
         self.configurar_columnas_grid(self.header_frame)
         self.dibujar_cabeceras()
         self.cargar_datos()
+
+    # === NUEVO: Función para normalizar a mayúsculas mientras escribe ===
+    def normalizar_pagina_entry(self, event):
+        """Convierte el texto del entry de página a mayúsculas mientras escribe"""
+        # Obtener el texto actual
+        texto = self.entry_pagina.get()
+        # Convertir a mayúsculas
+        texto_mayus = texto.upper()
+        # Si es diferente, actualizar y colocar el cursor al final
+        if texto != texto_mayus:
+            self.entry_pagina.delete(0, tk.END)
+            self.entry_pagina.insert(0, texto_mayus)
+            # Mantener el cursor al final
+            self.entry_pagina.icursor(tk.END)
 
     def configurar_columnas_grid(self, contenedor):
         """ Controla el ancho de las columnas de la grilla de forma estricta """
@@ -473,8 +490,9 @@ class AppLectura(ctk.CTk):
             
             ctk.CTkLabel(item_frame, text="").grid(row=0, column=3)
             
-            # === NUEVO: Página editable ===
-            pag_var = tk.StringVar(value=str(pagina))
+            # === MODIFICADO: Página editable con mayúsculas ===
+            # Mostrar siempre en mayúsculas al cargar
+            pag_var = tk.StringVar(value=str(pagina).upper())
             entry_pag = ctk.CTkEntry(item_frame, textvariable=pag_var, width=self.anchos["pagina"] - 10, justify="left")
             entry_pag.grid(row=0, column=4, sticky="ew", padx=4, pady=8)
             entry_pag.bind("<Return>", lambda e, idx=f_id, var=pag_var: self.actualizar_pagina_inline(idx, var))
@@ -579,21 +597,29 @@ class AppLectura(ctk.CTk):
         else:
             self.mostrar_pagina(self.pagina_actual)
 
-    # === NUEVO: Actualizar página inline ===
+    # === MODIFICADO: Actualizar página inline con mayúsculas ===
     def actualizar_pagina_inline(self, registro_id, string_var):
-        """Actualiza el campo página/plataforma con edición inline"""
+        """Actualiza el campo página/plataforma con edición inline y normaliza a mayúsculas"""
         nuevo_val = string_var.get().strip()
         
         if not nuevo_val:
-            # Si está vacío, restaurar valor anterior
+            # Si está vacío, restaurar valor anterior en mayúsculas
             self.cursor.execute("SELECT pagina FROM lecturas WHERE id = ?", (registro_id,))
             resultado = self.cursor.fetchone()
             if resultado:
-                string_var.set(str(resultado[0]))
+                string_var.set(str(resultado[0]).upper())
             return
         
+        # Convertir a mayúsculas antes de guardar
+        nuevo_val_mayus = nuevo_val.upper()
+        
+        # Actualizar el valor en el StringVar para mostrar en mayúsculas
+        if nuevo_val != nuevo_val_mayus:
+            string_var.set(nuevo_val_mayus)
+        
         fecha_actual = datetime.now().strftime("%d/%m/%Y %H:%M")
-        self.cursor.execute("UPDATE lecturas SET pagina = ?, fecha_mod = ? WHERE id = ?", (nuevo_val, fecha_actual, registro_id))
+        self.cursor.execute("UPDATE lecturas SET pagina = ?, fecha_mod = ? WHERE id = ?", 
+                           (nuevo_val_mayus, fecha_actual, registro_id))
         self.conn.commit()
         
         # Refrescar según modo actual
@@ -602,6 +628,7 @@ class AppLectura(ctk.CTk):
         else:
             self.mostrar_pagina(self.pagina_actual)
 
+    # === MODIFICADO: Agregar registro con mayúsculas ===
     def agregar_registro(self):
         nombre = self.entry_nombre.get().strip()
         capitulo = self.entry_capitulo.get().strip()
@@ -616,7 +643,11 @@ class AppLectura(ctk.CTk):
             messagebox.showerror("Error", "El capítulo debe ser un número válido (ej: 2, 2.3, 0.5)")
             return
 
-        self.cursor.execute("INSERT INTO lecturas (nombre, capitulo, pagina, terminado, fecha_mod) VALUES (?, ?, ?, 'No', ?)", (nombre, capitulo, pagina, fecha_actual))
+        # Convertir página a mayúsculas antes de guardar
+        pagina_mayus = pagina.upper()
+
+        self.cursor.execute("INSERT INTO lecturas (nombre, capitulo, pagina, terminado, fecha_mod) VALUES (?, ?, ?, 'No', ?)", 
+                           (nombre, capitulo, pagina_mayus, fecha_actual))
         self.conn.commit()
         self.entry_nombre.delete(0, tk.END)
         self.entry_capitulo.delete(0, tk.END)
