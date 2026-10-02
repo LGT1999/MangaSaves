@@ -1,0 +1,43 @@
+QWidget { background: $background; color: $text; font-family: 'Segoe UI'; font-size: 13px; }
+QLabel#title { font-size: 25px; font-weight: 700; }
+QLabel#subtitle, QLabel#hint, QLabel#pageInfo { color: $muted; }
+QFrame#addPanel { background: $panel; border: 1px solid $border; border-radius: 9px; }
+QLineEdit, QComboBox {
+    background: $input; border: 1px solid $input_border; border-radius: 5px;
+    padding: 7px 9px; selection-background-color: $primary; selection-color: $button_text; min-height: 20px;
+}
+QLineEdit:focus, QComboBox:focus { border: 1px solid $focus; }
+QComboBox::drop-down { border: none; width: 22px; }
+QComboBox QAbstractItemView { background: $panel; selection-background-color: $primary; selection-color: $button_text; }
+QPushButton {
+    background: $primary; color: $button_text; border: 1px solid $primary_border; border-radius: 5px;
+    padding: 8px 14px; font-weight: 600;
+}
+QPushButton:hover { background: $primary_hover; }
+QPushButton:pressed { background: $primary_pressed; }
+QPushButton#secondary { background: $secondary; color: $text; border-color: $secondary_border; }
+QPushButton#secondary:hover { background: $secondary_hover; }
+QPushButton#delete { background: $danger; border-color: $danger_border; }
+QPushButton#delete:hover { background: $danger_hover; }
+QPushButton:disabled { background: $disabled; color: $disabled_text; border-color: $border; }
+QPushButton#secondary:disabled, QPushButton#delete:disabled { background: $disabled; color: $disabled_text; border-color: $border; }
+QTableView {
+    background: $table; alternate-background-color: $alternate;
+    border: 1px solid $border; border-radius: 6px; gridline-color: $secondary;
+    selection-background-color: $selection; selection-color: $selection_text;
+}
+QTableView::item { padding: 0px 10px; border: none; }
+QTableView::item:focus { border: 1px solid $focus; }
+QHeaderView::section {
+    background: $header; color: $header_text; border: none;
+    border-right: 1px solid $header_border; padding: 12px 10px; font-weight: 600;
+}
+QScrollBar:vertical { background: $table; width: 12px; margin: 0; }
+QScrollBar::handle:vertical { background: $scrollbar; min-height: 30px; border-radius: 5px; }
+QScrollBar:horizontal { background: $table; height: 12px; margin: 0; }
+QScrollBar::handle:horizontal { background: $scrollbar; min-width: 30px; border-radius: 5px; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+QToolTip { background: $secondary; color: $text; border: 1px solid $tooltip_border; padding: 5px; }
+QStatusBar { color: $muted; }
+QStatusBar::item { border: none; }
